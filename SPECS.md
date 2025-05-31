@@ -210,9 +210,7 @@ movement artifacts, or suboptimal electrode placement.
 
 ---
 
-
 *This specification document describes version 0.1.0 of the MSNA Signal Simulator. For implementation details and API documentation, refer to the accompanying code documentation.*
-
 
 Author: Ryan 'RyanIRL' Peters
 
