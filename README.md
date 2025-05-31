@@ -40,10 +40,11 @@ pip install msna-sim
 Or install from source:
 
 ```bash
+# Clone the repository
 git clone https://github.com/ryanirl/msna-sim.git
-
 cd msna-sim
 
+# Install the package
 pip install -e .
 ```
 
