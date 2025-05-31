@@ -1,8 +1,7 @@
 # MSNA-Sim: Realistic MSNA Signal Simulation
 # 
-# A comprehensive Python library for generating realistic synthetic Muscle
-# Sympathetic Nerve Activity (MSNA) signals with physiologically accurate
-# timing, noise characteristics, and signal properties.
+# A library for generating synthetic Muscle Sympathetic Nerve Activity (MSNA)
+# data with realistic and physiologically accurate characteristics.
 
 __version__ = "0.1.0"
 __author__ = "Ryan 'RyanIRL' Peters"

@@ -7,7 +7,7 @@ with open("requirements.txt") as f:
 setup(
     name="msna-sim",
     version="0.1.0",
-    description="A library for generating realistic synthetic MSNA signals with physiologically accurate characteristics.",
+    description="A library for generating synthetic Muscle Sympathetic Nerve Activity (MSNA) data with realistic and physiologically accurate characteristics.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Ryan 'RyanIRL' Peters",
