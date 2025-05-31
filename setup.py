@@ -1,9 +1,5 @@
 from setuptools import setup, find_packages
 
-# Read requirements from requirements.txt
-with open("requirements.txt") as f:
-    required = f.read().splitlines()
-
 setup(
     name="msna-sim",
     version="0.1.0",
@@ -32,7 +28,12 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
     python_requires=">=3.8",
-    install_requires=required,
+    install_requires=[
+        "numpy>=1.19.0",
+        "pandas>=1.3.0",
+        "bokeh>=2.4.0",
+        "tornado>=6.0",
+    ],
     entry_points={
         "console_scripts": [
             "msna-sim-dashboard=msna_sim.dashboard:main_cli"
