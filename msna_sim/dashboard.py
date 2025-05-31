@@ -175,8 +175,7 @@ class MSNASimDashboard:
         # Set initial x-range to show first 10 seconds
         max_time = self.current_results.time[-1]
         initial_end = min(60.0, max_time)
-        main_plot.x_range.start = 0
-        main_plot.x_range.end = initial_end
+        main_plot.x_range = Range1d(start = 0, end = initial_end)
         
         # Plot signals
         clean_line = main_plot.line(
