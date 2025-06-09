@@ -37,17 +37,6 @@ Install from PyPI:
 pip install msna-sim
 ```
 
-Or install from source:
-
-```bash
-# Clone the repository
-git clone https://github.com/ryanirl/msna-sim.git
-cd msna-sim
-
-# Install the package
-pip install -e .
-```
-
 Requirements will be automatically installed, but can be found in `requirements.txt`.
 
 
@@ -69,6 +58,7 @@ The dashboard allows you to play with various simulation parmaeters, and export
 data as CSV. It could be used as the main way to interact with this library for
 users with minimal programming experience.
 
+## Examples
 
 ### Basic Programmatic Usage
 
@@ -80,13 +70,12 @@ results = quick_simulation(duration = 60, preset = "normal_adult")
 
 # Access the signals
 time = results.time
-clean_msna = results.clean_msna           # Clean MSNA signal
-noisy_msna = results.noisy_msna           # Realistic noisy signal
-burst_times = results.get_burst_times()   # Burst occurrence times
+clean_msna = results.clean_msna        # Clean MSNA signal
+noisy_msna = results.noisy_msna        # Realistic noisy signal
+burst_times = results.burst_peak_idx   # Burst occurrence times
 
 print(f"Generated {results.n_bursts} bursts")
-print(f"Burst rate: {results.burst_rate:.1f} bursts/min")
-print(f"Actual burst incidence: {results.actual_burst_incidence:.1f}%")
+print(f"Burst incidence: {results.burst_incidence:.1f}%")
 ```
 
 
@@ -109,7 +98,7 @@ simulation = Simulation(config)
 results = simulation.simulate(duration = 120, sampling_rate = 1000)
 
 print(f"Heart rate: {results.mean_heart_rate:.1f} bpm")
-print(f"Burst incidence: {results.actual_burst_incidence:.1f}%")
+print(f"Burst incidence: {results.burst_incidence:.1f}%")
 ```
 
 
@@ -120,20 +109,20 @@ from msna_sim import Simulation, PatientConfig, SignalConfig
 
 # Create custom patient configuration
 patient_config = PatientConfig(
-    heart_rate = 75.0,                    # beats per minute
-    hrv_std = 0.04,                       # heart rate variability
-    burst_incidence = 65.0,               # percentage of cardiac cycles with bursts
-    noise_floor = 0.25,                   # baseline noise level
-    signal_amplitude = 1.2,               # relative burst amplitude
-    resp_rate = 16.0,                     # breaths per minute
-    resp_modulation_strength = 0.4        # respiratory modulation strength
+    heart_rate = 75.0,              # beats per minute
+    hrv_std = 0.04,                 # heart rate variability
+    burst_incidence = 65.0,         # percentage of cardiac cycles with bursts
+    noise_floor = 0.25,             # baseline noise level
+    signal_amplitude = 1.2,         # relative burst amplitude
+    resp_rate = 16.0,               # breaths per minute
+    resp_modulation_strength = 0.4  # respiratory modulation strength
 )
 
 # Optional: customize signal processing parameters
 signal_config = SignalConfig(
-    integration_smoothing = 0.95,         # signal integration smoothing
-    pink_noise_amplitude = 0.4,           # pink noise contribution
-    spike_artifact_amplitude = 0.3        # spike artifact strength
+    integration_smoothing = 0.95,   # signal integration smoothing
+    pink_noise_amplitude = 0.4,     # pink noise contribution
+    spike_artifact_amplitude = 0.3  # spike artifact strength
 )
 
 simulation = Simulation(patient_config, signal_config)
@@ -177,10 +166,9 @@ The `SimulationResults` object provides:
 - **`clean_msna`**: Clean MSNA signal without noise
 - **`noisy_msna`**: Realistic MSNA signal with noise
 - **`respiratory_signal`**: Respiratory waveform
-- **`get_burst_times()`**: Array of burst occurrence times
+- **`burst_peak_idx`**: Array of burst occurrence times
 - **`n_bursts`**: Total number of bursts
-- **`burst_rate`**: Burst rate in bursts per minute
-- **`actual_burst_incidence`**: Realized burst incidence percentage
+- **`burst_incidence`**: Realized burst incidence percentage
 
 
 ## License
@@ -197,13 +185,8 @@ If you use this library in your research, please cite:
   author = {Ryan Peters},
   title = {msna-sim: Realistic MSNA Signal Simulation},
   url = {https://github.com/ryanirl/msna-sim},
-  version = {0.1.0},
+  version = {0.1.2},
   year = {2025}
 }
 ```
-
-## Contact
-
-If you have any questions or comments, feel free to email me at `ryanirl (at) icloud (dot) com`. 
-
 

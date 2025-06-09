@@ -1,6 +1,7 @@
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import warnings
 import os
 
 from bokeh.plotting import figure
@@ -26,6 +27,7 @@ from tornado.ioloop import IOLoop
 from msna_sim.simulator import Simulation
 from msna_sim.config import SignalConfig
 from msna_sim.config import create_preset_config
+from msna_sim.features import add_burst_features
 
 # Global plot parameters
 MAIN_PLOT_WIDTH = 1200
@@ -89,6 +91,9 @@ class MSNASimDashboard:
             sampling_rate = int(self.sampling_rate),
             seed = 42  # Fixed seed for reproducibility during parameter exploration
         )
+        self.current_results.burst_occurrences = add_burst_features( 
+            self.current_results, self.sampling_rate
+        )
     
     def _get_safe_filename(self, filename):
         """Get a safe filename that doesn't overwrite existing files"""
@@ -144,14 +149,41 @@ class MSNASimDashboard:
             respiratory = self.current_results.respiratory_signal
         ))
         
-        # Burst markers
-        burst_times = self.current_results.get_burst_times()
+        # Enhanced burst markers with comprehensive feature data
+        burst_times = self.current_results.burst_peak_idx / self.sampling_rate
         burst_y_pos = np.full(len(burst_times), TRUE_BURST_Y_POS)
         
-        burst_source = ColumnDataSource(data = dict(
-            time = burst_times, 
-            y_pos = burst_y_pos
-        ))
+        # Extract burst features for hover display
+        burst_data = {"time": burst_times, "y_pos": burst_y_pos}
+        
+        if self.current_results.burst_occurrences and len(self.current_results.burst_occurrences) > 0:
+            # Get first burst to check available features
+            sample_burst = self.current_results.burst_occurrences[0]
+            
+            # Core features for tooltip display
+            feature_keys = [
+                "peak_amplitude", 
+                "duration", 
+                "noisy_burst_width",
+                "energy_snr_db",
+                "mad_prominence_score", 
+                "noise_contamination_ratio"
+            ]
+            
+            for key in feature_keys:
+                if key in sample_burst:
+                    values = []
+                    for burst in self.current_results.burst_occurrences:
+                        if key in burst and burst[key] is not None:
+                            values.append(burst[key])
+                        else:
+                            values.append(np.nan)
+                    burst_data[key] = values
+                else:
+                    # Provide default values if feature not available
+                    burst_data[key] = [np.nan] * len(burst_times)
+        
+        burst_source = ColumnDataSource(data = burst_data)
         
         return data_source, burst_source
     
@@ -205,7 +237,7 @@ class MSNASimDashboard:
             legend_label = "Respiratory"
         )
         
-        # Burst markers
+        # Burst markers with enhanced hover information
         burst_markers = main_plot.scatter(
             "time", "y_pos",
             source = burst_source,
@@ -216,11 +248,25 @@ class MSNASimDashboard:
             legend_label = "Bursts"
         )
         
-        # Add hover tools
+        # Add hover tools for signals
         main_plot.add_tools(HoverTool(
             tooltips = [("Time", "@time{0.00}s"), ("Clean MSNA", "@clean_msna{0.000}")],
             renderers = [clean_line]
         ))
+        
+        # Add comprehensive hover tool for burst markers
+        burst_hover = HoverTool(
+            tooltips = [
+                ("Peak Amplitude", "@peak_amplitude{0.000}"),
+                ("Duration", "@duration{0.000}s"),
+                ("Burst Width (Noisy)", "@noisy_burst_width{0.000}s"),
+                ("Energy SNR (dB)", "@energy_snr_db{0.0}"),
+                ("Prominence", "@mad_prominence_score{0.0}"),
+                ("Noise Contamination Ratio", "@noise_contamination_ratio{0.000}"),
+            ],
+            renderers = [burst_markers]
+        )
+        main_plot.add_tools(burst_hover)
         
         # Legend
         main_plot.legend.click_policy = "hide"
@@ -527,13 +573,24 @@ class MSNASimDashboard:
         if self.current_results is None:
             return "<b>Status:</b> No simulation loaded"
         
+        # Calculate additional summary statistics
+        if self.current_results.burst_occurrences and len(self.current_results.burst_occurrences) > 0:
+            features = self.current_results.burst_features
+            mean_snr = np.mean(features.get("snr_db", [0]))
+        else:
+            mean_snr = 0
+        
         return f"""
         <b>Simulation Status:</b><br>
         Duration: {self.current_results.duration:.1f}s<br>
         Bursts: {self.current_results.n_bursts}<br>
-        Burst Rate: {self.current_results.burst_rate:.1f}/min<br>
-        Burst Incidence: {self.current_results.actual_burst_incidence:.1f}%<br>
-        Heart Rate: {self.current_results.mean_heart_rate:.1f} bpm
+        Burst Incidence: {self.current_results.burst_incidence:.1f}%<br>
+        Heart Rate: {self.current_results.mean_heart_rate:.1f} bpm<br>
+        <br>
+        <b>Burst Quality:</b><br>
+        Mean SNR: {mean_snr:.1f} dB<br>
+        <br>
+        <i>Hover over burst markers for detailed stats</i>
         """
     
     def _setup_callbacks(self, widgets, advanced_widgets, data_source, burst_source, main_plot, range_plot, advanced_section):
@@ -660,13 +717,21 @@ class MSNASimDashboard:
                 })
                 
                 # Add burst information
-                burst_times = self.current_results.get_burst_times()
-                df["Burst"] = 0
-                for burst_time in burst_times:
-                    # Find closest time index
-                    idx = np.argmin(np.abs(self.current_results.time - burst_time))
-                    if idx < len(df):
-                        df.loc[idx, "Burst"] = 1
+                burst_idx = self.current_results.burst_peak_idx
+
+                # Remove bursts that are outside the time range
+                inds = burst_idx < len(df)
+                burst_idx = burst_idx[inds]
+
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore")
+
+                    df["Burst"] = False
+                    df["Burst"][burst_idx] = True
+                    features = self.current_results.burst_features
+                    for feature, values in features.items():
+                        df[feature] = pd.NA
+                        df[feature][burst_idx] = values[inds]
                 
                 # Save to CSV
                 df.to_csv(safe_filename, index = False)
@@ -812,17 +877,7 @@ def main():
         allow_websocket_origin = ["localhost:5006"]
     )
     server.start()
-    
     print("MSNA Simulation Dashboard running at: http://localhost:5006/")
-    print("Controls:")
-    print("- Select presets or adjust parameters manually")
-    print("- Click 'Regenerate Signal' to apply changes")
-    print("- Toggle 'Advanced Features' for detailed parameter control")
-    print("- Use 'Reset Advanced Settings' to restore defaults")
-    print("- Specify filename and use 'Export to CSV' to save current simulation")
-    print("- Toggle display options to show/hide different signals")
-    print("- Files are auto-renamed to prevent overwrites (file.csv → file_1.csv)")
-    
     server.io_loop.add_callback(server.show, "/")
     server.io_loop.start()
 

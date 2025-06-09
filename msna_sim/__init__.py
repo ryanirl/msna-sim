@@ -3,7 +3,7 @@
 # A library for generating synthetic Muscle Sympathetic Nerve Activity (MSNA)
 # data with realistic and physiologically accurate characteristics.
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 __author__ = "Ryan 'RyanIRL' Peters"
 __email__ = "ryanirl@icloud.com"
 

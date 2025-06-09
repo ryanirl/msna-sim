@@ -183,36 +183,4 @@ around 0.3 represent typical clinical recordings with moderate noise. Value of
 movement artifacts, or suboptimal electrode placement.
 
 
-## Parameter Specifications
-
-### Core Physiological Parameters
-
-| Parameter | Range | Default | Unit | Description |
-|---|---|---|---|---|
-| `heart_rate` | 40-120 | 70 | bpm | Mean heart rate |
-| `burst_incidence` | 0-100 | 65 | % | Percentage of cardiac cycles with bursts |
-| `resp_rate` | 8-25 | 15 | bpm | Respiratory rate |
-
-### Signal Quality Parameters
-
-| Parameter | Range | Default | Unit | Description |
-|---|---|---|---|---|
-| `noise_floor` | 0.05-1.0 | 0.3 | - | Overall noise level |
-| `signal_amplitude` | 0.1-3.0 | 1.0 | - | Relative burst amplitude |
-
-### Timing Parameters
-
-| Parameter | Range | Default | Unit | Description |
-|---|---|---|---|---|
-| `burst_delay_mean` | 1.0-1.6 | 1.3 | s | Mean burst delay post-R-wave |
-| `burst_delay_std` | 0.05-0.25 | 0.15 | s | Burst timing variability |
-
-
----
-
-*This specification document describes version 0.1.0 of the MSNA Signal Simulator. For implementation details and API documentation, refer to the accompanying code documentation.*
-
-Author: Ryan 'RyanIRL' Peters
-
-License: MIT 
 

@@ -15,8 +15,8 @@ from msna_sim.noise import *
 
 @dataclass
 class SimulationResults:
-    """Container for MSNA simulation results."""
-    
+    """Dataclass for MSNA simulation results."""
+
     time: np.ndarray
     clean_msna: np.ndarray
     noisy_msna: np.ndarray
@@ -25,12 +25,11 @@ class SimulationResults:
     r_times: np.ndarray
     rr_intervals: np.ndarray
     burst_occurrences: List[Dict[str, Any]]
-    fs: int
     
     @property
     def duration(self) -> float:
         """Total recording duration in seconds."""
-        return len(self.time) / self.fs
+        return self.time[-1]
     
     @property
     def n_bursts(self) -> int:
@@ -38,13 +37,8 @@ class SimulationResults:
         return len(self.burst_occurrences)
     
     @property
-    def burst_rate(self) -> float:
-        """Burst rate in bursts per minute."""
-        return (self.n_bursts / self.duration) * 60 if self.duration > 0 else 0
-    
-    @property
-    def actual_burst_incidence(self) -> float:
-        """Actual burst incidence as percentage."""
+    def burst_incidence(self) -> float:
+        """Burst incidence as percentage."""
         if len(self.rr_intervals) == 0:
             return 0.0
         return (self.n_bursts / len(self.rr_intervals)) * 100
@@ -54,15 +48,36 @@ class SimulationResults:
         """Mean heart rate in bpm."""
         return 60.0 / float(np.mean(self.rr_intervals)) if len(self.rr_intervals) > 0 else 0.0
     
-    def get_burst_times(self) -> np.ndarray:
-        """Get array of burst occurrence times."""
-        return np.array([burst["time"] for burst in self.burst_occurrences])
+    @property
+    def burst_peak_idx(self) -> np.ndarray:
+        """Array of burst peak indices."""
+        return np.array([burst["peak_idx"] for burst in self.burst_occurrences if "peak_idx" in burst])
+    
+    @property
+    def burst_features(self) -> Dict[str, np.ndarray]:
+        """Get all burst features as arrays in a dictionary."""
+        if not self.burst_occurrences:
+            return {}
+        
+        features = {}
+        feature_keys = self.burst_occurrences[0].keys()
+        
+        for key in feature_keys:
+            values = []
+            for burst in self.burst_occurrences:
+                if key in burst and burst[key] is not None:
+                    values.append(burst[key])
+                else:
+                    values.append(np.nan)
+            features[key] = np.array(values)
+        
+        return features
 
 
 class Simulation:
     def __init__(self, patient_config: PatientConfig, signal_config: Optional[SignalConfig] = None) -> None:
         """
-        MSNA simulator with realistic signal generation.
+        MSNA simulator with realistic signal generation and comprehensive feature extraction.
 
         Args:
             patient_config: Patient physiological configuration
@@ -99,7 +114,7 @@ class Simulation:
         resp_signal = np.cos(resp_phase + phase_noise)
         
         # Convert to modulation factor
-        base_level = 1.0 - self.patient_config.resp_modulation_strength/2
+        base_level = 1.0 - self.patient_config.resp_modulation_strength / 2
         modulation = base_level + self.patient_config.resp_modulation_strength * (1 + resp_signal) / 2
         
         return modulation, resp_signal
@@ -112,9 +127,11 @@ class Simulation:
         for i in range(len(r_times) - 1):
             r_time = r_times[i]
             next_r_time = r_times[i + 1]
+
+            # The RR interval is the time between the current R-wave and the next R-wave
             rr_interval = next_r_time - r_time
             
-            # Get respiratory modulation
+            # The respiratory modulation is the cosine of the respiratory phase
             r_idx = min(int(r_time * fs), len(resp_modulation) - 1)
             resp_mod = resp_modulation[r_idx]
             
@@ -142,7 +159,7 @@ class Simulation:
         return burst_occurrences
 
     def _generate_burst_shape(self, duration_samples: int, amplitude: float) -> np.ndarray:
-        """Generate realistic burst shape."""
+        """Generate realistic burst shape and extract intrinsic features."""
         if duration_samples <= 0:
             return np.array([])
         
@@ -164,14 +181,11 @@ class Simulation:
         
         return burst_shape
 
-    def _generate_clean_msna(
-        self, burst_occurrences: List[Dict[str, Any]], n_samples: int, fs: int
-    ) -> np.ndarray:
-        """Generate clean MSNA signal."""
+    def _generate_clean_msna(self, burst_occurrences: List[Dict[str, Any]], n_samples: int, fs: int) -> np.ndarray:
+        """Generate clean MSNA signal and extract temporal features."""
         msna_signal = np.zeros(n_samples)
-        
-        for burst in burst_occurrences:
-            # Variable burst amplitude with gamma distribution
+        for i, burst in enumerate(burst_occurrences):
+            # Generate random burst amplitude from a Gamma distribution. 
             burst_amplitude = (
                 self.patient_config.signal_amplitude * 
                 np.random.gamma(
@@ -183,22 +197,47 @@ class Simulation:
             
             # Variable burst duration
             burst_duration = np.random.normal(
-                self.patient_config.burst_duration_mean, 
-                self.patient_config.burst_duration_std
+                self.patient_config.burst_duration_mean, self.patient_config.burst_duration_std
             )
             burst_duration = np.clip(burst_duration, BURST_DURATION_MIN, BURST_DURATION_MAX)
             
-            # Generate burst
+            # Generate burst shape and extract intrinsic features
             duration_samples = int(burst_duration * fs)
             burst_shape = self._generate_burst_shape(duration_samples, burst_amplitude)
-            
-            # Place burst in signal
+
+            # Calculate signal placement
             start_idx = int(burst["time"] * fs)
             end_idx = min(start_idx + duration_samples, n_samples)
             actual_samples = end_idx - start_idx
             
             if actual_samples > 0:
+                # Place burst in signal
                 msna_signal[start_idx:end_idx] += burst_shape[:actual_samples]
+
+                # Peak information
+                local_peak_idx = np.argmax(burst_shape)
+                
+                # Integrated area under the burst
+                local_integrated_area = np.trapz(burst_shape) if len(burst_shape) > 1 else burst_shape[0] if len(burst_shape) == 1 else 0.0
+                
+                # Extract temporal features in signal time coordinates
+                peak_idx_global = start_idx + local_peak_idx
+                
+                # Update burst occurrence with all extractable features
+                burst_occurrences[i].update({
+                    # Temporal features
+                    "duration": burst_duration,
+                    
+                    # Amplitude features
+                    "peak_amplitude": burst_shape[local_peak_idx],
+                    "integrated_area": local_integrated_area,
+                    
+                    # Signal placement information
+                    "start_idx": start_idx,
+                    "end_idx": end_idx,
+                    "peak_idx": peak_idx_global,
+                    "peak_time": peak_idx_global / fs,
+                })
         
         return msna_signal
     
@@ -247,19 +286,18 @@ class Simulation:
         
         # Respiratory artifacts
         breathing_artifact = generate_respiratory_artifacts(
-            t,
-            self.patient_config.resp_rate,
+            t, self.patient_config.resp_rate,
             noise_floor * self.signal_config.breathing_artifact_amplitude
         )
         
         # Combine the noise sources
         total_noise = pink_noise + lf_noise + mf_noise + hf_noise + powerline_noise + breathing_artifact + spike_noise
-        
+
         return signal + total_noise
     
     def simulate(self, duration: float, sampling_rate: int = 250, seed: Optional[int] = None) -> SimulationResults:
         """
-        Run complete MSNA simulation.
+        Run complete MSNA simulation with comprehensive feature extraction.
 
         Args:
             duration: Recording duration in seconds
@@ -267,7 +305,7 @@ class Simulation:
             seed: Random seed for reproducibility
 
         Returns:
-            SimulationResults: Dataclass containing the simulation results
+            SimulationResults: Dataclass containing the simulation results and extracted features
         """
         if duration <= 0:
             raise ValueError("Duration must be positive")
@@ -278,7 +316,7 @@ class Simulation:
         if seed is not None:
             np.random.seed(seed)
         
-        # Create time array, an get the number of samples
+        # Create time array and get the number of samples
         t = np.arange(0, duration, 1 / sampling_rate)
         n_samples = len(t)
         
@@ -286,14 +324,17 @@ class Simulation:
         r_times, rr_intervals = self._generate_cardiac_timing(duration)
         resp_modulation, resp_signal = self._generate_respiratory_modulation(t)
         
-        # Generate bursts
+        # Generate burst occurrences
         burst_occurrences = self._determine_burst_occurrences(r_times, resp_modulation, sampling_rate, duration)
         
-        # Generate signals
+        # Generate clean MSNA signal with intrinsic feature extraction
         clean_msna = self._generate_clean_msna(burst_occurrences, n_samples, sampling_rate)
+        
+        # Add realistic noise
         noisy_msna = self._add_realistic_noise(clean_msna, t, n_samples, sampling_rate)
         
-        return SimulationResults(
+        # Create results dataclass
+        results = SimulationResults(
             time = t,
             clean_msna = clean_msna,
             noisy_msna = noisy_msna,
@@ -301,8 +342,9 @@ class Simulation:
             respiratory_modulation = resp_modulation,
             r_times = r_times,
             rr_intervals = rr_intervals,
-            burst_occurrences = burst_occurrences,
-            fs = sampling_rate
+            burst_occurrences = burst_occurrences
         )
+
+        return results
 
 
